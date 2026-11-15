@@ -13,6 +13,7 @@
     --accent: #7c5cff; --accent-2: #a48bff; --danger: #ff5c7a;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -50,10 +51,17 @@
   .btn.play svg { width: 38px; height: 38px; }
   .btn small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: -4px; }
 
-  .vol { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
-  .vol + .vol { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 8px; }
-  .vol .label { width: 92px; flex: none; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .vol .val { width: 34px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .vol { padding: 6px 0; }
+  .vol + .vol, #pinnedApps .vol:first-child, #otherApps .vol:first-child { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 8px; }
+  .vol-head { display: flex; align-items: center; gap: 8px; }
+  .vol-ctrl { display: flex; align-items: center; gap: 10px; }
+  .vol .label { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vol .val { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .step {
+    flex: none; border: 0; border-radius: 12px; background: #222531; color: var(--text); font: inherit;
+    width: 48px; height: 38px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; transition: transform .08s, background .15s;
+  }
+  .step:active { transform: scale(.92); background: #2c3040; }
   .mute { border: 0; background: transparent; color: var(--text); width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; }
   .mute svg { width: 22px; height: 22px; fill: currentColor; }
   .mute.on { color: var(--danger); }
@@ -67,6 +75,24 @@
 
   details summary { color: var(--muted); font-size: 13px; margin: 14px 4px 0; cursor: pointer; }
   .empty { color: var(--muted); text-align: center; padding: 12px 0; }
+  .now { position: relative; }
+  .now .app, .now .title { padding-right: 44px; }
+  .fs {
+    position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border: 0; border-radius: 12px;
+    background: #222531; color: var(--text); display: grid; place-items: center;
+  }
+  .fs:active { background: #2c3040; }
+  .fs svg { width: 22px; height: 22px; fill: currentColor; }
+
+  .switch-row { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 14px; }
+  .switch-row span { flex: 1; }
+  .switch-row small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
+  .switch { -webkit-appearance: none; appearance: none; flex: none; width: 48px; height: 28px; border-radius: 999px; background: var(--line); position: relative; margin: 0; transition: background .15s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { transform: translateX(20px); }
+
+  .toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: #2c3040; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; white-space: nowrap; }
   .status { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--danger); color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 13px; }
 </style>
 </head>
@@ -75,6 +101,7 @@
 <h2>Tocando agora</h2>
 <div class="sessions" id="sessions"></div>
 <div class="card now">
+  <button class="fs" id="fullscreen" hidden aria-label="Tela cheia"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
   <div class="app" id="app">—</div>
   <div class="title" id="title">Nenhuma mídia detectada</div>
   <div class="artist" id="artist"></div>
@@ -89,10 +116,8 @@
 <h2>Volume</h2>
 <div class="card" id="volumes">
   <div class="vol" id="masterRow">
-    <span class="label">Sistema</span>
-    <button class="mute" id="masterMute"></button>
-    <input type="range" min="0" max="100" id="masterVol">
-    <span class="val" id="masterVal">–</span>
+    <div class="vol-head"><span class="label">Sistema</span><span class="val">–</span><button class="mute"></button></div>
+    <div class="vol-ctrl"><button class="step" data-delta="-5">−5</button><input type="range" min="0" max="100"><button class="step" data-delta="5">+5</button></div>
   </div>
   <div id="pinnedApps"></div>
   <details id="otherWrap" hidden>
@@ -101,6 +126,15 @@
   </details>
 </div>
 
+<h2>Celular</h2>
+<div class="card">
+  <label class="switch-row">
+    <span>Controles na tela de bloqueio<small>Play/pause, ±10s, e volume ±5 nos botões de anterior/próxima</small></span>
+    <input type="checkbox" class="switch" id="lockToggle">
+  </label>
+</div>
+
+<div class="toast" id="toast" hidden></div>
 <div class="status" id="status" hidden>Sem conexão com o PC</div>
 
 <script>
@@ -163,6 +197,7 @@ function renderMedia() {
   $('title').textContent = s ? (s.title || (s.playing ? 'Reproduzindo' : 'Pausado')) : 'Nenhuma mídia detectada';
   $('artist').textContent = s ? s.artist : '';
   $('toggleIcon').innerHTML = s && s.playing ? ICON.pause : ICON.play;
+  $('fullscreen').hidden = !(s && s.can_fullscreen);
   const hasTime = s && s.duration > 0;
   $('progress').hidden = !hasTime;
   if (hasTime) {
@@ -177,7 +212,8 @@ function setRange(input, v) { input.value = v; input.style.setProperty('--p', v 
 function volRow(app) {
   const row = document.createElement('div');
   row.className = 'vol';
-  row.innerHTML = `<span class="label"></span><button class="mute"></button><input type="range" min="0" max="100"><span class="val"></span>`;
+  row.innerHTML = `<div class="vol-head"><span class="label"></span><span class="val"></span><button class="mute"></button></div>`
+    + `<div class="vol-ctrl"><button class="step" data-delta="-5">−5</button><input type="range" min="0" max="100"><button class="step" data-delta="5">+5</button></div>`;
   row.querySelector('.label').textContent = app.name.replace(/\.exe$/i, '').replace(/-shell-ng$/, '');
   wireVolume(row, `/api/app/${encodeURIComponent(app.name)}`, app.name);
   updateRow(row, app, app.name);
@@ -209,6 +245,22 @@ function wireVolume(row, path, key) {
     await api(path, { mute: !mute.dataset.mute }).catch(() => {});
     refresh();
   });
+  row.querySelectorAll('.step').forEach(b => b.addEventListener('click', async () => {
+    const delta = +b.dataset.delta;
+    setRange(input, Math.max(0, Math.min(100, +input.value + delta)));
+    val.textContent = input.value;
+    if (navigator.vibrate) navigator.vibrate(10);
+    await api(path, { delta }).catch(() => {});
+    refresh();
+  }));
+}
+
+let toastTimer = null;
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').hidden = true, 2500);
 }
 
 const appRows = new Map();
@@ -235,6 +287,7 @@ async function refresh() {
     $('status').hidden = true;
     renderMedia();
     renderVolumes();
+    updateLock();
   } catch (e) {
     $('status').textContent = e.message === '401' ? 'Token inválido — abra o link do QR code' : 'Sem conexão com o PC';
     $('status').hidden = false;
@@ -243,20 +296,146 @@ async function refresh() {
 
 wireVolume($('masterRow'), '/api/master', '__master');
 
-$('toggle').onclick = async () => {
+async function playback(action) {
   const s = currentSession();
-  if (s) { s.playing = !s.playing; renderMedia(); }
-  await api('/api/media/toggle', { session: s?.id }).catch(() => {});
+  if (s) {
+    s.playing = action === 'toggle' ? !s.playing : action === 'play';
+    renderMedia();
+    updateLock();
+  }
+  await api(`/api/media/${action}`, { session: s?.id }).catch(() => {});
   setTimeout(refresh, 400);
-};
-document.querySelectorAll('[data-seek]').forEach(b => b.onclick = async () => {
-  if (navigator.vibrate) navigator.vibrate(15);
-  await api('/api/seek', { seconds: +b.dataset.seek, session: currentSession()?.id }).catch(() => {});
+}
+
+async function seek(seconds) {
+  await api('/api/seek', { seconds, session: currentSession()?.id }).catch(() => {});
   setTimeout(refresh, 300);
+}
+
+async function stepMaster(delta) {
+  await api('/api/master', { delta }).catch(() => {});
+  refresh();
+}
+
+$('toggle').onclick = () => playback('toggle');
+document.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => {
+  if (navigator.vibrate) navigator.vibrate(15);
+  seek(+b.dataset.seek);
 });
+$('fullscreen').onclick = async () => {
+  if (navigator.vibrate) navigator.vibrate(15);
+  const r = await api('/api/fullscreen', { session: currentSession()?.id }).catch(() => null);
+  if (!r) toast('Falha ao falar com o PC');
+  else if (r.error) toast(r.error);
+};
+
+// --- Tela de bloqueio ---
+// O celular só mostra controles na tela de bloqueio se a página estiver tocando algum áudio.
+// Por isso a página toca um áudio praticamente mudo em loop e usa a Media Session API
+// pra mostrar o que está tocando no PC e repassar os botões.
+const lock = { on: false, audio: null, meta: '' };
+const hasMediaSession = 'mediaSession' in navigator;
+
+function quietWav(seconds = 10, rate = 8000) {
+  const n = seconds * rate, v = new DataView(new ArrayBuffer(44 + n * 2));
+  const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  // ruído de ±1 em 16 bits: inaudível, mas não é silêncio absoluto (alguns navegadores ignoram áudio 100% mudo)
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, (Math.random() * 3 | 0) - 1, true);
+  return URL.createObjectURL(new Blob([v.buffer], { type: 'audio/wav' }));
+}
+
+const LOCK_ACTIONS = {
+  play: () => playback('play'),
+  pause: () => playback('pause'),
+  seekbackward: () => seek(-10),
+  seekforward: () => seek(10),
+  previoustrack: () => stepMaster(-5),
+  nexttrack: () => stepMaster(5),
+};
+
+function setLockHandlers(on) {
+  for (const [action, fn] of Object.entries(LOCK_ACTIONS)) {
+    try { navigator.mediaSession.setActionHandler(action, on ? fn : null); } catch {}
+  }
+}
+
+async function startLock() {
+  if (!hasMediaSession) return false;
+  if (!lock.audio) {
+    lock.audio = new Audio(quietWav());
+    lock.audio.loop = true;
+  }
+  try { await lock.audio.play(); } catch { return false; }
+  lock.on = true;
+  lock.meta = '';
+  setLockHandlers(true);
+  updateLock();
+  return true;
+}
+
+function stopLock() {
+  lock.on = false;
+  lock.audio?.pause();
+  if (!hasMediaSession) return;
+  setLockHandlers(false);
+  navigator.mediaSession.metadata = null;
+  navigator.mediaSession.playbackState = 'none';
+}
+
+function updateLock() {
+  if (!lock.on || !state) return;
+  if (lock.audio.paused) lock.audio.play().catch(() => {});
+  const ms = navigator.mediaSession, s = currentSession();
+  const title = s ? (s.title || s.app) : 'Nenhuma mídia no PC';
+  const vol = state.master.mute ? 'mudo' : state.master.volume + '%';
+  const artist = (s ? s.app + ' · ' : '') + 'Volume ' + vol;
+  if (title + artist !== lock.meta) {
+    lock.meta = title + artist;
+    ms.metadata = new MediaMetadata({ title, artist, album: 'Media Controller' });
+  }
+  ms.playbackState = s && s.playing ? 'playing' : 'paused';
+  try {
+    // sem isso a tela de bloqueio mostraria o progresso do áudio mudo da página
+    ms.setPositionState(s && s.duration > 0
+      ? { duration: s.duration, position: Math.min(s.position, s.duration), playbackRate: 1 }
+      : { duration: Infinity, position: 0, playbackRate: 1 });
+  } catch {}
+}
+
+const LOCK_KEY = 'mc-lock';
+$('lockToggle').onchange = async e => {
+  if (e.target.checked) {
+    if (!await startLock()) {
+      e.target.checked = false;
+      toast(hasMediaSession ? 'Não deu pra tocar áudio na página' : 'Navegador sem suporte');
+    }
+  } else {
+    stopLock();
+  }
+  try { localStorage.setItem(LOCK_KEY, e.target.checked ? '1' : ''); } catch {}
+};
+
+// lembra a escolha; o navegador exige um toque na tela antes de tocar áudio
+try {
+  if (localStorage.getItem(LOCK_KEY) && hasMediaSession) {
+    $('lockToggle').checked = true;
+    startLock().then(ok => {
+      if (!ok) document.addEventListener('pointerdown', () => { if ($('lockToggle').checked) startLock(); }, { once: true });
+    });
+  }
+} catch {}
 
 refresh();
-setInterval(() => { if (!document.hidden) refresh(); }, 1500);
+// com a tela de bloqueio ativa, continua atualizando em segundo plano (mais devagar)
+let tick = 0;
+setInterval(() => {
+  tick++;
+  if (!document.hidden || (lock.on && tick % 2 === 0)) refresh();
+}, 1500);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 </script>
 </body>

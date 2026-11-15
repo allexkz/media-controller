@@ -13,7 +13,11 @@ VK = {
     "left": win32con.VK_LEFT,
     "right": win32con.VK_RIGHT,
     "media_play_pause": win32con.VK_MEDIA_PLAY_PAUSE,
+    "f": ord("F"),
 }
+
+# teclas que também geram um caractere (WM_CHAR) quando postadas
+_CHAR = {"space": " ", "f": "f"}
 
 _EXTENDED = {win32con.VK_LEFT, win32con.VK_RIGHT}
 
@@ -77,8 +81,8 @@ def post_to(process_name, key, target_class="Chrome_WidgetWin_1"):
     scan = win32api.MapVirtualKey(vk, 0)
     lparam = 1 | (scan << 16) | ((1 << 24) if vk in _EXTENDED else 0)
     win32api.PostMessage(target, win32con.WM_KEYDOWN, vk, lparam)
-    if vk == win32con.VK_SPACE:
-        win32api.PostMessage(target, win32con.WM_CHAR, ord(" "), lparam)
+    if key in _CHAR:
+        win32api.PostMessage(target, win32con.WM_CHAR, ord(_CHAR[key]), lparam)
     win32api.PostMessage(target, win32con.WM_KEYUP, vk, lparam | (1 << 30) | (1 << 31))
     return True
 
@@ -98,3 +102,22 @@ def send_to(process_name, key, restore_focus=True):
         except Exception:
             pass
     return True
+
+
+def windows_with_title(text):
+    """Janelas visíveis cujo título contém `text`: [(hwnd, título)]."""
+    found = []
+    def cb(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd):
+            title = win32gui.GetWindowText(hwnd)
+            if text in title:
+                found.append((hwnd, title))
+        return True
+    win32gui.EnumWindows(cb, None)
+    return found
+
+
+def press_in(hwnd, key):
+    """Traz a janela pra frente e aperta a tecla (sem devolver o foco)."""
+    _focus(hwnd)
+    tap(VK[key])

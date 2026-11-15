@@ -53,6 +53,7 @@ def auth(x_token: Optional[str] = Header(default=None)):
 class VolumeBody(BaseModel):
     volume: Optional[int] = None
     mute: Optional[bool] = None
+    delta: Optional[int] = None
 
 
 class ControlBody(BaseModel):
@@ -77,13 +78,13 @@ async def state():
 
 @app.post("/api/master", dependencies=[Depends(auth)])
 async def master(body: VolumeBody):
-    await run_in_threadpool(audio.set_master, body.volume, body.mute)
+    await run_in_threadpool(audio.set_master, body.volume, body.mute, body.delta)
     return await run_in_threadpool(audio.get_master)
 
 
 @app.post("/api/app/{name}", dependencies=[Depends(auth)])
 async def app_volume(name: str, body: VolumeBody):
-    if not await run_in_threadpool(audio.set_app, name, body.volume, body.mute):
+    if not await run_in_threadpool(audio.set_app, name, body.volume, body.mute, body.delta):
         raise HTTPException(404, "app sem sessão de áudio")
     return {"ok": True}
 
@@ -98,6 +99,11 @@ async def media_control(action: str, body: ControlBody):
 @app.post("/api/seek", dependencies=[Depends(auth)])
 async def media_seek(body: SeekBody):
     return await media.seek(body.seconds, body.session)
+
+
+@app.post("/api/fullscreen", dependencies=[Depends(auth)])
+async def media_fullscreen(body: ControlBody):
+    return await media.fullscreen(body.session)
 
 
 @app.get("/")

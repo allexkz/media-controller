@@ -47,8 +47,25 @@ def _live_position(session, tl):
     return pos
 
 
+def _youtube_window(title, windows=None):
+    """Janela do navegador com a aba do YouTube desse vídeo em primeiro plano.
+
+    O título da janela do navegador é o da aba ativa ("<vídeo> - YouTube - ..."),
+    então só encontra se a aba do vídeo for a aba ativa da janela.
+    """
+    if not title:
+        return None
+    if windows is None:
+        windows = keys.windows_with_title("YouTube")
+    for hwnd, text in windows:
+        if title in text:
+            return hwnd
+    return None
+
+
 async def list_sessions():
     sessions = []
+    yt_windows = keys.windows_with_title("YouTube")
     mgr = await _get_manager()
     current = mgr.get_current_session()
     current_id = current.source_app_user_model_id if current else None
@@ -69,6 +86,7 @@ async def list_sessions():
             "duration": tl.end_time.total_seconds(),
             "can_seek": bool(info.controls.is_playback_position_enabled),
             "current": s.source_app_user_model_id == current_id,
+            "can_fullscreen": _youtube_window(props.title, yt_windows) is not None,
         })
     if _stremio_running():
         sessions.append({
@@ -81,6 +99,7 @@ async def list_sessions():
             "duration": None,
             "can_seek": True,
             "current": False,
+            "can_fullscreen": True,
         })
     return sessions
 
@@ -153,3 +172,22 @@ async def seek(seconds, session_id=None):
     target = max(timedelta(0), min(target, tl.end_time)) if tl.end_time else max(timedelta(0), target)
     ok = await s.try_change_playback_position_async(int(target.total_seconds() * 10_000_000))
     return {"target": sid, "ok": bool(ok)}
+
+
+async def fullscreen(session_id=None):
+    """Alterna tela cheia (tecla F) no YouTube ou no Stremio, trazendo a janela pra frente."""
+    sid = await _resolve(session_id)
+    if sid is None:
+        return {"error": "nenhuma mídia ativa"}
+    if sid == STREMIO_ID:
+        hwnd = await asyncio.to_thread(keys.find_window, STREMIO_PROCESS)
+    else:
+        s = await _find(sid)
+        if s is None:
+            return {"error": "sessão não encontrada"}
+        props = await s.try_get_media_properties_async()
+        hwnd = await asyncio.to_thread(_youtube_window, props.title)
+    if not hwnd:
+        return {"error": "janela do vídeo não encontrada"}
+    await asyncio.to_thread(keys.press_in, hwnd, "f")
+    return {"target": sid}

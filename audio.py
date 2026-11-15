@@ -30,11 +30,17 @@ def get_master():
     }
 
 
+def _clamp(v):
+    return max(0, min(100, v))
+
+
 @com
-def set_master(volume=None, mute=None):
+def set_master(volume=None, mute=None, delta=None):
     ep = _endpoint()
+    if delta is not None:
+        volume = round(ep.GetMasterVolumeLevelScalar() * 100) + delta
     if volume is not None:
-        ep.SetMasterVolumeLevelScalar(max(0, min(100, volume)) / 100, None)
+        ep.SetMasterVolumeLevelScalar(_clamp(volume) / 100, None)
     if mute is not None:
         ep.SetMute(int(mute), None)
 
@@ -67,14 +73,17 @@ def list_apps():
 
 
 @com
-def set_app(name, volume=None, mute=None):
+def set_app(name, volume=None, mute=None, delta=None):
     found = False
     for s in AudioUtilities.GetAllSessions():
         if s.Process and s.Process.name().lower() == name.lower():
             found = True
             vol = s.SimpleAudioVolume
-            if volume is not None:
-                vol.SetMasterVolume(max(0, min(100, volume)) / 100, None)
+            target = volume
+            if delta is not None:
+                target = round(vol.GetMasterVolume() * 100) + delta
+            if target is not None:
+                vol.SetMasterVolume(_clamp(target) / 100, None)
             if mute is not None:
                 vol.SetMute(int(mute), None)
     return found
